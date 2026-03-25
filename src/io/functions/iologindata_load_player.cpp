@@ -528,7 +528,7 @@ void IOLoginDataLoad::loadPlayerBestiaryCharms(const std::shared_ptr<Player> &pl
 		}
 
 		unsigned long attrBestSize;
-		const char* Bestattr = result->getStream("tracker list", attrBestSize);
+		const char* Bestattr = result->getStream("tracker_list", attrBestSize);
 		PropStream propBestStream;
 		propBestStream.init(Bestattr, attrBestSize);
 
@@ -557,7 +557,7 @@ void IOLoginDataLoad::loadPlayerInstantSpellList(const std::shared_ptr<Player> &
 	query << "SELECT `player_id`, `name` FROM `player_spells` WHERE `player_id` = " << player->getGUID();
 	if ((result = db.storeQuery(query.str()))) {
 		do {
-			player->learnedInstantSpellList.emplace_back(result->getString("name"));
+			player->learnedInstantSpellList.emplace(result->getString("name"));
 		} while (result->next());
 	}
 }
@@ -568,11 +568,9 @@ void IOLoginDataLoad::loadPlayerInventoryItems(const std::shared_ptr<Player> &pl
 		return;
 	}
 
-	bool oldProtocol = g_configManager().getBoolean(OLD_PROTOCOL) && player->getProtocolVersion() < 1200;
 	auto query = fmt::format("SELECT pid, sid, itemtype, count, attributes FROM player_items WHERE player_id = {} ORDER BY sid DESC", player->getGUID());
 
 	ItemsMap inventoryItems;
-	std::vector<std::pair<uint8_t, std::shared_ptr<Container>>> openContainersList;
 	std::vector<std::shared_ptr<Item>> itemsToStartDecaying;
 
 	try {
@@ -606,12 +604,6 @@ void IOLoginDataLoad::loadPlayerInventoryItems(const std::shared_ptr<Player> &pl
 
 				const std::shared_ptr<Container> &itemContainer = item->getContainer();
 				if (itemContainer) {
-					if (!oldProtocol) {
-						auto cid = item->getAttribute<int64_t>(ItemAttribute_t::OPENCONTAINER);
-						if (cid > 0) {
-							openContainersList.emplace_back(cid, itemContainer);
-						}
-					}
 					for (const bool isLootContainer : { true, false }) {
 						const auto checkAttribute = isLootContainer ? ItemAttribute_t::QUICKLOOTCONTAINER : ItemAttribute_t::OBTAINCONTAINER;
 						if (item->hasAttribute(checkAttribute)) {
@@ -632,18 +624,6 @@ void IOLoginDataLoad::loadPlayerInventoryItems(const std::shared_ptr<Player> &pl
 		for (const auto &item : itemsToStartDecaying) {
 			item->startDecaying();
 		}
-
-		if (!oldProtocol) {
-			std::ranges::sort(openContainersList.begin(), openContainersList.end(), [](const std::pair<uint8_t, std::shared_ptr<Container>> &left, const std::pair<uint8_t, std::shared_ptr<Container>> &right) {
-				return left.first < right.first;
-			});
-
-			for (auto &it : openContainersList) {
-				player->addContainer(it.first - 1, it.second);
-				player->onSendContainer(it.second);
-			}
-		}
-
 	} catch (const std::exception &e) {
 		g_logger().error("[IOLoginDataLoad::loadPlayerInventoryItems] - Exception during inventory loading: {}", e.what());
 	}
@@ -1060,4 +1040,102 @@ void IOLoginDataLoad::loadPlayerUpdateSystem(const std::shared_ptr<Player> &play
 	player->updateBaseSpeed();
 	player->updateInventoryWeight();
 	player->updateItemsLight(true);
+}
+
+void IOLoginDataLoad::loadPlayerWeaponProficiency(const std::shared_ptr<Player> &player, const DBResult_ptr &result) {
+	if (!result || !player) {
+		g_logger().warn("[{}] - Player or Result nullptr", __FUNCTION__);
+		return;
+	}
+
+	unsigned long blobSize;
+	const char* blob = result->getStream("weapon_proficiencies", blobSize);
+
+	PropStream stream;
+	stream.init(blob, blobSize);
+
+	player->weaponProficiencies.clear();
+
+	uint16_t mapSize;
+	if (!stream.read<uint16_t>(mapSize)) {
+		return;
+	}
+
+	for (uint16_t i = 0; i < mapSize; ++i) {
+		uint16_t itemId;
+		if (!stream.read<uint16_t>(itemId)) {
+			break;
+		}
+
+		WeaponProficiencyData data;
+		if (!stream.read<uint32_t>(data.experience)) {
+			break;
+		}
+
+		uint8_t perkCount;
+		if (!stream.read<uint8_t>(perkCount)) {
+			break;
+		}
+
+		for (uint8_t j = 0; j < perkCount; ++j) {
+			WeaponProficiencyPerk perk {};
+			if (!stream.read<uint8_t>(perk.proficiencyLevel)) {
+				break;
+			}
+
+			if (!stream.read<uint8_t>(perk.perkPosition)) {
+				break;
+			}
+
+			data.activePerks.push_back(perk);
+		}
+
+		player->weaponProficiencies[itemId] = std::move(data);
+	}
+}
+
+void IOLoginDataLoad::loadPlayerExivaRestrictions(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		g_logger().warn("[{}] - Player nullptr", __FUNCTION__);
+		return;
+	}
+
+	auto &restrictions = player->getExivaRestrictions();
+
+	const auto &scope = player->kv()->scoped("exiva-restrictions");
+
+	if (auto v = scope->get("allowAll")) {
+		restrictions.allowAll = v->getNumber() != 0;
+	}
+	if (auto v = scope->get("allowOwnGuild")) {
+		restrictions.allowOwnGuild = v->getNumber() != 0;
+	}
+	if (auto v = scope->get("allowOwnParty")) {
+		restrictions.allowOwnParty = v->getNumber() != 0;
+	}
+	if (auto v = scope->get("allowVipList")) {
+		restrictions.allowVipList = v->getNumber() != 0;
+	}
+	if (auto v = scope->get("allowPlayerWhitelist")) {
+		restrictions.allowPlayerWhitelist = v->getNumber() != 0;
+	}
+	if (auto v = scope->get("allowGuildWhitelist")) {
+		restrictions.allowGuildWhitelist = v->getNumber() != 0;
+	}
+
+	const auto playerWhitelistOpt = scope->get("playerWhitelist");
+	if (playerWhitelistOpt.has_value()) {
+		const auto playerWhitelist = playerWhitelistOpt.value().get<ArrayType>();
+		for (const auto &playerGuid : playerWhitelist) {
+			restrictions.playerWhitelist.push_back(playerGuid.get<IntType>());
+		}
+	}
+
+	const auto guildWhitelistOpt = scope->get("guildWhitelist");
+	if (guildWhitelistOpt.has_value()) {
+		const auto guildWhitelist = guildWhitelistOpt.value().get<ArrayType>();
+		for (const auto &guildId : guildWhitelist) {
+			restrictions.guildWhitelist.push_back(guildId.get<IntType>());
+		}
+	}
 }

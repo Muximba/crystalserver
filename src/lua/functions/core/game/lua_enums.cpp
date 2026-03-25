@@ -667,6 +667,18 @@ void LuaEnums::initConstMeEnums(lua_State* L) {
 	registerEnum(L, CONST_ME_WHITE_ENERGYSHOCK);
 	registerEnum(L, CONST_ME_GREEN_ENERGYSHOCK);
 	registerEnum(L, CONST_ME_YELLOW_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_INK_SPLASH);
+	registerEnum(L, CONST_ME_PAPER_PLANE);
+	registerEnum(L, CONST_ME_SPIKES);
+	registerEnum(L, CONST_ME_BLOOD_RAIN);
+	registerEnum(L, CONST_ME_OPEN_BOOKMACHINE);
+	registerEnum(L, CONST_ME_OPEN_BOOKSPELL);
+	registerEnum(L, CONST_ME_SMALL_WHITE_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_SMALL_GREEN_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_SMALL_PINK_ENERGYSHOCK);
+	registerEnum(L, CONST_ME_SMALLWHITE_ENERGY_SPARK);
+	registerEnum(L, CONST_ME_SMALLGREEN_ENERGY_SPARK);
+	registerEnum(L, CONST_ME_SMALLPINK_ENERGY_SPARK);
 }
 
 void LuaEnums::initConstAniEnums(lua_State* L) {
@@ -1088,6 +1100,7 @@ void LuaEnums::initBestiaryEnums(lua_State* L) {
 	registerEnum(L, BESTY_RACE_GIANT);
 	registerEnum(L, BESTY_RACE_HUMAN);
 	registerEnum(L, BESTY_RACE_HUMANOID);
+	registerEnum(L, BESTY_RACE_INKBORN);
 	registerEnum(L, BESTY_RACE_LYCANTHROPE);
 	registerEnum(L, BESTY_RACE_MAGICAL);
 	registerEnum(L, BESTY_RACE_MAMMAL);

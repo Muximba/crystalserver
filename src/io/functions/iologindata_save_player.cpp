@@ -172,6 +172,8 @@ bool IOLoginDataSave::savePlayerFirst(const std::shared_ptr<Player> &player) {
 		player->changeHealth(1);
 	}
 
+	savePlayerExivaRestrictions(player);
+
 	Database &db = Database::getInstance();
 
 	std::ostringstream query;
@@ -323,6 +325,26 @@ bool IOLoginDataSave::savePlayerFirst(const std::shared_ptr<Player> &player) {
 	query << "`virtue` = " << static_cast<uint16_t>(player->getVirtue()) << ",";
 	query << "`harmony` = " << static_cast<uint16_t>(player->getHarmony()) << ",";
 
+	// Weapon Proficiency
+	PropWriteStream propWeaponProficiency;
+
+	propWeaponProficiency.write<uint16_t>(player->weaponProficiencies.size());
+	for (const auto &[itemId, proficiency] : player->weaponProficiencies) {
+		propWeaponProficiency.write<uint16_t>(itemId);
+		propWeaponProficiency.write<uint32_t>(proficiency.experience);
+
+		propWeaponProficiency.write<uint8_t>(proficiency.activePerks.size());
+		for (const auto &perk : proficiency.activePerks) {
+			propWeaponProficiency.write<uint8_t>(perk.proficiencyLevel);
+			propWeaponProficiency.write<uint8_t>(perk.perkPosition);
+		}
+	}
+
+	size_t proficiencySize;
+	const char* proficiencyData = propWeaponProficiency.getStream(proficiencySize);
+
+	query << "`weapon_proficiencies` = " << db.escapeBlob(proficiencyData, static_cast<uint32_t>(proficiencySize)) << ",";
+
 	if (!player->isOffline()) {
 		auto now = std::chrono::system_clock::now();
 		auto lastLoginSaved = std::chrono::system_clock::from_time_t(player->lastLoginSaved);
@@ -463,7 +485,7 @@ bool IOLoginDataSave::savePlayerBestiarySystem(const std::shared_ptr<Player> &pl
 	}
 	size_t trackerSize;
 	const char* trackerList = propBestiaryStream.getStream(trackerSize);
-	query << " `tracker list` = " << db.escapeBlob(trackerList, static_cast<uint32_t>(trackerSize));
+	query << " `tracker_list` = " << db.escapeBlob(trackerList, static_cast<uint32_t>(trackerSize));
 	query << " WHERE `player_id` = " << player->getGUID();
 
 	if (!db.executeQuery(query.str())) {
@@ -921,4 +943,35 @@ bool IOLoginDataSave::savePlayerMounts(const std::shared_ptr<Player> &player) {
 
 	player->setMountsModified(false);
 	return true;
+}
+
+void IOLoginDataSave::savePlayerExivaRestrictions(const std::shared_ptr<Player> &player) {
+	if (!player) {
+		return;
+	}
+
+	const auto &restrictions = player->getExivaRestrictions();
+
+	const auto &scope = player->kv()->scoped("exiva-restrictions");
+
+	scope->set("allowAll", restrictions.allowAll);
+	scope->set("allowOwnGuild", restrictions.allowOwnGuild);
+	scope->set("allowOwnParty", restrictions.allowOwnParty);
+	scope->set("allowVipList", restrictions.allowVipList);
+	scope->set("allowPlayerWhitelist", restrictions.allowPlayerWhitelist);
+	scope->set("allowGuildWhitelist", restrictions.allowGuildWhitelist);
+
+	ArrayType playerArrayWrapper;
+	for (const auto &playerGuid : restrictions.playerWhitelist) {
+		playerArrayWrapper.push_back(ValueWrapper(static_cast<int>(playerGuid)));
+	}
+
+	scope->set("playerWhitelist", ValueWrapper(playerArrayWrapper));
+
+	ArrayType guildArrayWrapper;
+	for (const auto &guildId : restrictions.guildWhitelist) {
+		guildArrayWrapper.push_back(ValueWrapper(static_cast<int>(guildId)));
+	}
+
+	scope->set("guildWhitelist", ValueWrapper(guildArrayWrapper));
 }

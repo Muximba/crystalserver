@@ -175,6 +175,9 @@ bool IOLoginData::loadPlayer(const std::shared_ptr<Player> &player, const DBResu
 		// Load instant spells list
 		IOLoginDataLoad::loadPlayerInstantSpellList(player, result);
 
+		// load weapon proficiency
+		IOLoginDataLoad::loadPlayerWeaponProficiency(player, result);
+
 		if (disableIrrelevantInfo) {
 			return true;
 		}
@@ -187,6 +190,9 @@ bool IOLoginData::loadPlayer(const std::shared_ptr<Player> &player, const DBResu
 
 		IOLoginDataLoad::loadPlayerInitializeSystem(player);
 		IOLoginDataLoad::loadPlayerUpdateSystem(player);
+
+		// Load exiva restrictions
+		IOLoginDataLoad::loadPlayerExivaRestrictions(player);
 
 		return true;
 	} catch (const std::system_error &error) {

@@ -18,6 +18,7 @@
 #pragma once
 
 #include "server/network/protocol/protocol.hpp"
+#include <unordered_map>
 #include "game/movement/position.hpp"
 #include "utils/utils_definitions.hpp"
 
@@ -77,7 +78,7 @@ using UsersMap = std::map<uint32_t, std::shared_ptr<Player>>;
 using MarketOfferList = std::list<MarketOffer>;
 using HistoryMarketOfferList = std::list<HistoryMarketOffer>;
 using ItemsTierCountList = std::map<uint16_t, std::map<uint8_t, uint32_t>>;
-using StashItemList = std::map<uint16_t, uint32_t>;
+using StashItemList = std::unordered_map<uint16_t, uint32_t>;
 using HouseMap = std::map<uint32_t, std::shared_ptr<House>>;
 
 struct TextMessage {
@@ -174,7 +175,7 @@ private:
 
 	void sendSessionEndInformation(SessionEndInformations information);
 
-	void sendItemInspection(uint16_t itemId, uint8_t itemCount, const std::shared_ptr<Item> &item, bool cyclopedia);
+	void sendItemInspection(uint16_t itemId, uint8_t itemCount, const std::shared_ptr<Item> &item, uint8_t inspectionType);
 	void parseInspectionObject(NetworkMessage &msg);
 
 	void parseFriendSystemAction(NetworkMessage &msg);
@@ -273,7 +274,7 @@ private:
 	void parseCloseChannel(NetworkMessage &msg);
 
 	// Imbuement info
-	void addImbuementInfo(NetworkMessage &msg, uint16_t imbuementId) const;
+	void addImbuementInfo(NetworkMessage &msg, uint16_t imbuementId, bool isScroll) const;
 
 	// Send functions
 	void sendChannelMessage(const std::string &author, const std::string &text, SpeakClasses type, uint16_t channel);
@@ -290,7 +291,7 @@ private:
 	void sendIconBakragore(const IconBakragore icon);
 	void sendFYIBox(const std::string &message);
 
-	void openImbuementWindow(const std::shared_ptr<Item> &item);
+	void openImbuementWindow(const Imbuement_Window_t type, const std::shared_ptr<Item> &item = nullptr);
 	void sendImbuementResult(const std::string &message);
 	void closeImbuementWindow();
 
@@ -453,6 +454,7 @@ private:
 	void sendRemoveContainerItem(uint8_t cid, uint16_t slot, const std::shared_ptr<Item> &lastItem);
 
 	void sendContainer(uint8_t cid, const std::shared_ptr<Container> &container, bool hasParent, uint16_t firstIndex);
+	void sendEmptyContainer(uint8_t cid);
 	void sendCloseContainer(uint8_t cid);
 
 	// quickloot
@@ -515,7 +517,16 @@ private:
 
 	// OTCv8
 	void sendFeatures();
-
+	// OTCR
+	void sendOTCRFeatures();
+	void sendAttachedEffect(const std::shared_ptr<Creature> &creature, uint16_t effectId);
+	void sendDetachEffect(const std::shared_ptr<Creature> &creature, uint16_t effectId);
+	void sendShader(const std::shared_ptr<Creature> &creature, const std::string &shaderName);
+	void sendMapShader(const std::string &shaderName);
+	void sendPlayerTyping(const std::shared_ptr<Creature> &creature, uint8_t typing);
+	void parsePlayerTyping(NetworkMessage &msg);
+	void AddOutfitCustomOTCR(NetworkMessage &msg, const Outfit_t &outfit);
+	void sendOutfitWindowCustomOTCR(NetworkMessage &msg);
 	void parseInventoryImbuements(NetworkMessage &msg);
 	void sendInventoryImbuements(const std::map<Slots_t, std::shared_ptr<Item>> &items);
 
@@ -531,13 +542,19 @@ private:
 	void parseWheelGemAction(NetworkMessage &msg);
 
 	void sendHarmonyProtocol(const uint8_t harmonyValue);
-	void sendSereneProtocol(const bool isSerene);
+	void sendSereneProtocol(const bool isSerene = true);
 	void sendVirtueProtocol(const uint8_t virtueValue);
 	void parseSelectSpellAimProtocol(NetworkMessage &msg);
+
+	void parseImbuementWindow(NetworkMessage &msg);
+	void parseWeaponProficiency(NetworkMessage &msg);
+	void sendWeaponProficiencyExperience(const uint16_t itemId, const uint32_t experience);
+	void sendWeaponProficiencyInfo(const uint16_t itemId);
 
 	friend class Player;
 	friend class PlayerWheel;
 	friend class PlayerVIP;
+	friend class PlayerAttachedEffects;
 
 	std::unordered_set<uint32_t> knownCreatureSet;
 	std::shared_ptr<Player> player = nullptr;
@@ -561,6 +578,7 @@ private:
 
 	uint16_t otclientV8 = 0;
 	bool isOTC = false;
+	bool isOTCR = false;
 
 	void sendOpenStash();
 	void parseStashWithdraw(NetworkMessage &msg);
@@ -572,7 +590,6 @@ private:
 	void sendSingleSoundEffect(const Position &pos, SoundEffect_t id, SourceEffect_t source);
 	void sendDoubleSoundEffect(const Position &pos, SoundEffect_t mainSoundId, SourceEffect_t mainSource, SoundEffect_t secondarySoundId, SourceEffect_t secondarySource);
 
-	void sendHotkeyPreset();
 	void sendTakeScreenshot(Screenshot_t screenshotType);
 	void sendDisableLoginMusic();
 
@@ -581,4 +598,13 @@ private:
 	void resetPlayerDeathTime() {
 		m_playerDeathTime = 0;
 	}
+
+	void parseExivaRestrictions(NetworkMessage &msg);
+	void sendExivaRestrictions(
+		bool isLogin = false,
+		const std::vector<std::string> &addedPlayerNames = {},
+		const std::vector<std::string> &removedPlayerNames = {},
+		const std::vector<std::string> &addedGuildNames = {},
+		const std::vector<std::string> &removedGuildNames = {}
+	);
 };

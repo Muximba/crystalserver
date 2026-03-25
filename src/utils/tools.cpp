@@ -207,10 +207,15 @@ std::string transformToSHA1(const std::string &input) {
 	return std::string(hexstring, 40);
 }
 
-uint16_t getStashSize(const std::map<uint16_t, uint32_t> &itemList) {
+uint16_t getStashSize(const std::unordered_map<uint16_t, uint32_t> &itemList) {
 	uint16_t size = 0;
 	for (const auto &[itemId, itemCount] : itemList) {
-		size += ceil(itemCount / static_cast<float_t>(Item::items[itemId].stackSize));
+		const auto &it = Item::items[itemId];
+		if (it.stackable && it.stackSize > 0) {
+			size += (itemCount + it.stackSize - 1) / it.stackSize;
+		} else {
+			size += itemCount;
+		}
 	}
 	return size;
 }
@@ -900,8 +905,8 @@ const ImbuementTypeNames imbuementTypeNames = {
 	{ "skillboost distance", IMBUEMENT_SKILLBOOST_DISTANCE },
 	{ "skillboost magic level", IMBUEMENT_SKILLBOOST_MAGIC_LEVEL },
 	{ "increase capacity", IMBUEMENT_INCREASE_CAPACITY },
-	{ "paralysis removal", IMBUEMENT_PARALYSIS_REMOVAL },
 	{ "skillboost fist", IMBUEMENT_SKILLBOOST_FIST },
+	{ "paralysis removal", IMBUEMENT_PARALYSIS_REMOVAL },
 };
 
 /**
